@@ -11,10 +11,11 @@ FILE* input_file_core3;
 int cache_size = 4096;
 int assocaitivity = 2;
 int block_size = 32;
+int block_num;
 
 int main(int argc, char** argv)
 {
-    if(argc <= 3){
+    if(argc < 3){
         printf("too few parameters!\n");
         printf("usage: ./coherence protocol input_file (cache_size associativity block_size).\n");
         exit(1);
@@ -61,17 +62,17 @@ int main(int argc, char** argv)
 
     // cache size
     if(argc >= 4){
-        cache_size = atoi(argv[4]);
+        cache_size = atoi(argv[3]);
     }
 
     // assocaitivity
     if(argc >= 5){
-        assocaitivity = atoi(argv[5]);
+        assocaitivity = atoi(argv[4]);
     }
 
     // block_size
     if(argc >= 6){
-        block_size = atoi(argv[6]);
+        block_size = atoi(argv[5]);
     }
 
     if(argc > 6){
@@ -82,4 +83,12 @@ int main(int argc, char** argv)
     printf("> cache_size: %dBytes.\n", cache_size);
     printf("> assocaitivity: %d.\n", assocaitivity);
     printf("> block_size: %dBytes.\n", block_size);
+
+    block_num = cache_size / assocaitivity / block_size;
+    if(protocol == MESI){
+        simulate_MESI();
+    }
+    else{
+        simulate_Dragon();
+    }
 }
