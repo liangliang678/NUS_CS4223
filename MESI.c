@@ -296,11 +296,11 @@ void snoop_bus(int core_num, int* state, uint32_t* tag)
             uint32_t bus_tag = bus[i].addr >> (offset_bits + index_bits);
             uint32_t bus_index = (bus[i].addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
-            if(bus_tag == tag[bus_index] && state[bus_index] != INVALID){
-                hit_flag = 1;
-            }
-            if(bus_tag == tag[block_num + bus_index] && state[block_num + bus_index] != INVALID){
-                hit_flag = 2;
+            for(int i = 0; i < assocaitivity; i++){
+                if(bus_tag == tag[i * block_num + bus_index] && state[i * block_num + bus_index] != INVALID){
+                    hit_flag = i + 1;
+                    break;
+                }
             }
             if(!hit_flag){
                 bus[i].busy--;
