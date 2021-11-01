@@ -66,18 +66,22 @@ void snoop_bus(int core_num, int* state, uint32_t* tag)
                 if(state[(hit_flag - 1) * block_num + bus_index] == MODIFIED){
                     bus[i].ack = 1;
                     state[(hit_flag - 1) * block_num + bus_index] = SHARED;
+                    bus_wb++;
                 }
                 else if(state[(hit_flag - 1) * block_num + bus_index] == EXCLUSIVE){
                     state[(hit_flag - 1) * block_num + bus_index] = SHARED;
+                    bus_inv++;
                 }
             }
             else if(bus[i].tran = BUSRDX){
                 if(state[(hit_flag - 1) * block_num + bus_index] == MODIFIED){
                     bus[i].ack = 1;
                     state[(hit_flag - 1) * block_num + bus_index] = INVALID;
+                    bus_wb++;
                 }
                 else{
                     state[(hit_flag - 1) * block_num + bus_index] = INVALID;
+                    bus_inv++;
                 }
             }
 

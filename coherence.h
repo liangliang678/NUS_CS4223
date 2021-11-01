@@ -43,6 +43,9 @@ extern uint32_t TAG_MASK;
 extern uint32_t INDEX_MASK;
 extern uint32_t offset_bits;
 extern uint32_t index_bits;
+
+extern long long bus_wb;
+extern long long bus_inv;
 extern bus_t bus[4];
 extern pthread_mutex_t mutex_bus;
 

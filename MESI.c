@@ -23,6 +23,9 @@ pthread_mutex_t mutex_bus;
 pthread_mutex_t mutex_finish;
 
 int finish = 0;
+long long max_cycle;
+long long bus_wb = 0;
+long long bus_inv = 0;
 bus_t bus[4];
 
 void simulate_MESI()
@@ -84,7 +87,8 @@ void simulate_MESI()
     pthread_join(core1, NULL);
     pthread_join(core2, NULL);
     pthread_join(core3, NULL);
-    printf("> simulation finished.\n");
+    printf("> simulation finished at cycle %ld.\n", max_cycle);
+    printf("> bus_wb: %ld, bus_inv: %ld\n", bus_wb, bus_inv);
 }
 
 void* MESI_core(int* core_num_pointer)
@@ -137,6 +141,8 @@ void* MESI_core(int* core_num_pointer)
     long long cache_miss = 0;
     long long bus_idle = 0;
     long long mem_idle = 0;
+    long long private_acc = 0;
+    long long shared_acc = 0;
 
     char line[100];
     while(fgets(line, 100, input_file)){
@@ -152,7 +158,6 @@ void* MESI_core(int* core_num_pointer)
 
         // wait until inst being issued
         while(cycle != next_inst){
-            // fprintf(log, "cycle %lld: executing\n", cycle);
             snoop_bus(core_num, state, tag);
             cycle++;
             if(core_num == 0 && cycle % 200000 == 0){
@@ -205,7 +210,6 @@ void* MESI_core(int* core_num_pointer)
                 // wait for data (actually we are writing data back as well but does not matter)
                 int counter = ack ? 200 : 100;  
                 while(counter != 0){
-                    // fprintf(log, "cycle %lld: load, waiting memory data\n", cycle);
                     mem_idle++;
                     snoop_bus(core_num, state, tag);
                     cycle++;
@@ -226,12 +230,24 @@ void* MESI_core(int* core_num_pointer)
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
                 bus_cancle(channel);
+                if(state[refill_way * block_num + addr_index] == SHARED){
+                    shared_acc++;
+                }
+                else{
+                    private_acc++;
+                }
             }
             // if cache hit, update lru
             else {
                 cache_hit++;
                 fprintf(log, "cycle %lld: load, tag %x, index %x, cache hit way %d\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 lru[(hit_flag - 1) * block_num + addr_index]++;
+                if(state[(hit_flag - 1) * block_num + addr_index] == SHARED){
+                    shared_acc++;
+                }
+                else{
+                    private_acc++;
+                }
             }
             next_inst = cycle + 1;
         }
@@ -268,7 +284,7 @@ void* MESI_core(int* core_num_pointer)
                 int ack;
                 while((ack = bus_ack(channel)) == -1){
                     bus_idle++;
-                    fprintf(log, "cycle %lld: load, waiting BUSRDX ack\n", cycle);
+                    fprintf(log, "cycle %lld: store, waiting BUSRDX ack\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -279,7 +295,6 @@ void* MESI_core(int* core_num_pointer)
                 // wait for data
                 int counter = ack ? 200 : 100;  
                 while(counter != 0){
-                    // fprintf(log, "cycle %lld: store, waiting memory data\n", cycle);
                     mem_idle++;
                     snoop_bus(core_num, state, tag);
                     cycle++;
@@ -307,8 +322,8 @@ void* MESI_core(int* core_num_pointer)
                 // busrdx
                 int channel;
                 while((channel = bus_send(core_num, BUSRDX, NULL, addr, 0)) == -1){
+                    fprintf(log, "cycle %lld: store, waiting sending BUSRDX\n", cycle);
                     bus_idle++;
-                    fprintf(log, "cycle %lld: store, waiting memory data\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -320,7 +335,7 @@ void* MESI_core(int* core_num_pointer)
                 int ack;
                 while((ack = bus_ack(channel)) == -1){
                     bus_idle++;
-                    fprintf(log, "cycle %lld: load, waiting BUSRD ack\n", cycle);
+                    fprintf(log, "cycle %lld: store, waiting BUSRDX ack\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -364,10 +379,12 @@ void* MESI_core(int* core_num_pointer)
     printf("> core%d finish at cycle %ld\n", core_num, cycle);
     printf("> core%d compute_cycle: %ld, bus_idle: %ld, mem_idle: %ld\n", core_num, compute_cycle, bus_idle, mem_idle);
     printf("> core%d load_inst_num: %ld, store_inst_num: %ld\n", core_num, load_inst_num, store_inst_num);
-    printf("> core%d cache_hit: %ld, cache_miss: %ld\n", core_num, cache_hit, cache_miss);
+    printf("> core%d private_acc: %ld, shared_acc: %ld\n", core_num, private_acc, shared_acc);
+    printf("> core%d cache_hit: %ld, cache_miss: %ld, hit_rate: %lf\n", core_num, cache_hit, cache_miss, cache_hit * 1.0 / (cache_hit + cache_miss));
 
     pthread_mutex_lock(&mutex_finish);
     finish++;
+    max_cycle = cycle;
     pthread_barrier_wait(&barrier); // TODO
     pthread_mutex_unlock(&mutex_finish);
     while(finish != 4){
