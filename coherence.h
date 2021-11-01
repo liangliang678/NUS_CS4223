@@ -49,6 +49,7 @@ extern pthread_mutex_t mutex_bus;
 extern void simulate_MESI();
 extern void* MESI_core(int* core_num_pointer);
 extern void simulate_Dragon();
+
 extern int check_share(uint32_t tag, uint32_t index);
 
 extern int bus_send(int sender, int tran, char* data, uint32_t addr, int len);

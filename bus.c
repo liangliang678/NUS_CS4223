@@ -18,7 +18,7 @@ int bus_send(int sender, int tran, char* data, uint32_t addr, int len)
     // no free bus channel
     if(i == 4){
         pthread_mutex_unlock(&mutex_bus);
-        return 0;
+        return -1;
     }
 
     // exist a bus trans with same mem block
@@ -26,7 +26,7 @@ int bus_send(int sender, int tran, char* data, uint32_t addr, int len)
         if(bus[j].busy){
             if(addr & TAG_INDEX_MASK == bus[j].addr & TAG_INDEX_MASK){
                 pthread_mutex_unlock(&mutex_bus);
-                return 0;
+                return -1;
             }
         }
     }
@@ -40,7 +40,7 @@ int bus_send(int sender, int tran, char* data, uint32_t addr, int len)
     bus[i].len = len;
     
     pthread_mutex_unlock(&mutex_bus);
-    return 1;
+    return i;
 }
 
 void snoop_bus(int core_num, int* state, uint32_t* tag)
@@ -84,7 +84,6 @@ void snoop_bus(int core_num, int* state, uint32_t* tag)
             bus[i].busy--;
         }
     }
-    
     pthread_mutex_unlock(&mutex_bus);
 }
 

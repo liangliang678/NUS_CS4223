@@ -130,6 +130,14 @@ void* MESI_core(int* core_num_pointer)
     // start simulation
     long long cycle = 0;
     long long next_inst = 0;
+    long long compute_cycle = 0;
+    long long load_inst_num = 0;
+    long long store_inst_num = 0;
+    long long cache_hit = 0;
+    long long cache_miss = 0;
+    long long bus_idle = 0;
+    long long mem_idle = 0;
+
     char line[100];
     while(fgets(line, 100, input_file)){
         // get inst and addr
@@ -155,6 +163,7 @@ void* MESI_core(int* core_num_pointer)
 
         // load
         if(line[0] == '0'){
+            load_inst_num++;
             uint32_t addr_tag = addr >> (offset_bits + index_bits);
             uint32_t addr_index = (addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
@@ -167,10 +176,12 @@ void* MESI_core(int* core_num_pointer)
 
             // if cache miss
             if(hit_flag == 0){
+                cache_miss++;
                 fprintf(log, "cycle %lld: load, tag %x, index %x, cache miss\n", cycle, addr_tag, addr_index);
                 // bus
                 int channel;
-                while(!(channel = bus_send(core_num, BUSRD, NULL, addr, 0))){
+                while((channel = bus_send(core_num, BUSRD, NULL, addr, 0)) == -1){
+                    bus_idle++;
                     fprintf(log, "cycle %lld: load, waiting sending BUSRD\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
@@ -182,6 +193,7 @@ void* MESI_core(int* core_num_pointer)
                 // wait for bus ack
                 int ack;
                 while((ack = bus_ack(channel)) == -1){
+                    bus_idle++;
                     fprintf(log, "cycle %lld: load, waiting BUSRD ack\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
@@ -194,6 +206,7 @@ void* MESI_core(int* core_num_pointer)
                 int counter = ack ? 200 : 100;  
                 while(counter != 0){
                     // fprintf(log, "cycle %lld: load, waiting memory data\n", cycle);
+                    mem_idle++;
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -216,13 +229,15 @@ void* MESI_core(int* core_num_pointer)
             }
             // if cache hit, update lru
             else {
+                cache_hit++;
                 fprintf(log, "cycle %lld: load, tag %x, index %x, cache hit way %d\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 lru[(hit_flag - 1) * block_num + addr_index]++;
             }
-            next_inst = cycle;
+            next_inst = cycle + 1;
         }
         // store
         else if(line[0] == '1'){
+            store_inst_num++;
             uint32_t addr_tag = addr >> (offset_bits + index_bits);
             uint32_t addr_index = (addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
@@ -235,11 +250,13 @@ void* MESI_core(int* core_num_pointer)
                   
             // if cache miss
             if(hit_flag == 0){
+                cache_miss++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache miss\n", cycle, addr_tag, addr_index);
                 // bus
                 int channel;
-                while(!(channel = bus_send(core_num, BUSRDX, NULL, addr, 0))){
-                    fprintf(log, "cycle %lld: store, waiting sending BUSRD\n", cycle);
+                while((channel = bus_send(core_num, BUSRDX, NULL, addr, 0)) == -1){
+                    bus_idle++;
+                    fprintf(log, "cycle %lld: store, waiting sending BUSRDX\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -250,7 +267,8 @@ void* MESI_core(int* core_num_pointer)
                 // wait for bus ack
                 int ack;
                 while((ack = bus_ack(channel)) == -1){
-                    fprintf(log, "cycle %lld: load, waiting BUSRD ack\n", cycle);
+                    bus_idle++;
+                    fprintf(log, "cycle %lld: load, waiting BUSRDX ack\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -262,6 +280,7 @@ void* MESI_core(int* core_num_pointer)
                 int counter = ack ? 200 : 100;  
                 while(counter != 0){
                     // fprintf(log, "cycle %lld: store, waiting memory data\n", cycle);
+                    mem_idle++;
                     snoop_bus(core_num, state, tag);
                     cycle++;
                     if(core_num == 0 && cycle % 200000 == 0){
@@ -283,10 +302,12 @@ void* MESI_core(int* core_num_pointer)
                 bus_cancle(channel);
             }
             else if(state[(hit_flag - 1) * block_num + addr_index] == SHARED){
+                cache_hit++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in S state\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 // busrdx
                 int channel;
-                while(!(channel = bus_send(core_num, BUSRDX, NULL, addr, 0))){
+                while((channel = bus_send(core_num, BUSRDX, NULL, addr, 0)) == -1){
+                    bus_idle++;
                     fprintf(log, "cycle %lld: store, waiting memory data\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
@@ -298,6 +319,7 @@ void* MESI_core(int* core_num_pointer)
                 // wait for bus ack
                 int ack;
                 while((ack = bus_ack(channel)) == -1){
+                    bus_idle++;
                     fprintf(log, "cycle %lld: load, waiting BUSRD ack\n", cycle);
                     snoop_bus(core_num, state, tag);
                     cycle++;
@@ -311,23 +333,39 @@ void* MESI_core(int* core_num_pointer)
                 bus_cancle(channel);
             }
             else if(state[(hit_flag - 1) * block_num + addr_index] == EXCLUSIVE){
+                cache_hit++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in E state\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 state[(hit_flag - 1) * block_num + addr_index] = MODIFIED; 
                 lru[(hit_flag - 1) * block_num + addr_index]++;
             }
             // if cache hit, update lru
             else{
+                cache_hit++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 lru[(hit_flag - 1) * block_num + addr_index]++;
             }
-            next_inst = cycle;
+            next_inst = cycle + 1;
         }
         else{
             next_inst += addr;
+            compute_cycle += addr;
         }
     }
     
-    printf("> core%d finish at cycle %d\n", core_num, cycle);
+    while(cycle != next_inst){
+        snoop_bus(core_num, state, tag);
+        cycle++;
+        if(core_num == 0 && cycle % 200000 == 0){
+            printf("simulation cycle %lld\n", cycle);
+        }
+        pthread_barrier_wait(&barrier);
+    }
+    
+    printf("> core%d finish at cycle %ld\n", core_num, cycle);
+    printf("> core%d compute_cycle: %ld, bus_idle: %ld, mem_idle: %ld\n", core_num, compute_cycle, bus_idle, mem_idle);
+    printf("> core%d load_inst_num: %ld, store_inst_num: %ld\n", core_num, load_inst_num, store_inst_num);
+    printf("> core%d cache_hit: %ld, cache_miss: %ld\n", core_num, cache_hit, cache_miss);
+
     pthread_mutex_lock(&mutex_finish);
     finish++;
     pthread_barrier_wait(&barrier); // TODO
