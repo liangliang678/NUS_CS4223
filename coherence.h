@@ -29,7 +29,7 @@ extern FILE* input_file_core1;
 extern FILE* input_file_core2;
 extern FILE* input_file_core3;
 extern int cache_size;
-extern int assocaitivity;
+extern int associativity;
 extern int block_size;
 extern int block_num;
 extern uint32_t TAG_INDEX_MASK;

@@ -9,10 +9,10 @@ FILE* input_file_core1;
 FILE* input_file_core2;
 FILE* input_file_core3;
 int cache_size = 4096;
-int assocaitivity = 2;
+int associativity = 2;
 int block_size = 32;
-int block_num;
 
+int block_num;
 uint32_t TAG_INDEX_MASK = ~0;
 uint32_t TAG_MASK = ~0;
 uint32_t INDEX_MASK = ~0;
@@ -71,9 +71,9 @@ int main(int argc, char** argv)
         cache_size = atoi(argv[3]);
     }
 
-    // assocaitivity
+    // associativity
     if(argc >= 5){
-        assocaitivity = atoi(argv[4]);
+        associativity = atoi(argv[4]);
     }
 
     // block_size
@@ -87,10 +87,10 @@ int main(int argc, char** argv)
     }
 
     printf("> cache_size: %d Bytes\n", cache_size);
-    printf("> assocaitivity: %d\n", assocaitivity);
+    printf("> associativity: %d\n", associativity);
     printf("> block_size: %d Bytes\n", block_size);
 
-    block_num = cache_size / assocaitivity / block_size;
+    block_num = cache_size / associativity / block_size;
     for(int i = block_size; i != 1; i /= 2){
         TAG_INDEX_MASK = TAG_INDEX_MASK << 1;
         INDEX_MASK = INDEX_MASK << 1;

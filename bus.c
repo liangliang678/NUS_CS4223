@@ -53,7 +53,7 @@ int snoop_bus(int core_num, int* state, uint32_t* tag, long long* cycle)
             uint32_t bus_tag = bus[i].addr >> (offset_bits + index_bits);
             uint32_t bus_index = (bus[i].addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
-            for(int i = 0; i < assocaitivity; i++){
+            for(int i = 0; i < associativity; i++){
                 if(bus_tag == tag[i * block_num + bus_index] && state[i * block_num + bus_index] != INVALID){
                     hit_flag = i + 1;
                     break;

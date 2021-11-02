@@ -27,20 +27,20 @@ long long max_cycle;
 void simulate_MESI()
 {
     printf("> simulation init...\n");
-    state_core0 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    state_core1 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    state_core2 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    state_core3 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    tag_core0 = (uint32_t*)malloc(assocaitivity * block_num * sizeof(uint32_t));
-    tag_core1 = (uint32_t*)malloc(assocaitivity * block_num * sizeof(uint32_t));
-    tag_core2 = (uint32_t*)malloc(assocaitivity * block_num * sizeof(uint32_t));
-    tag_core3 = (uint32_t*)malloc(assocaitivity * block_num * sizeof(uint32_t));
-    lru_core0 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    lru_core1 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    lru_core2 = (int*)malloc(assocaitivity * block_num * sizeof(int));
-    lru_core3 = (int*)malloc(assocaitivity * block_num * sizeof(int));
+    state_core0 = (int*)malloc(associativity * block_num * sizeof(int));
+    state_core1 = (int*)malloc(associativity * block_num * sizeof(int));
+    state_core2 = (int*)malloc(associativity * block_num * sizeof(int));
+    state_core3 = (int*)malloc(associativity * block_num * sizeof(int));
+    tag_core0 = (uint32_t*)malloc(associativity * block_num * sizeof(uint32_t));
+    tag_core1 = (uint32_t*)malloc(associativity * block_num * sizeof(uint32_t));
+    tag_core2 = (uint32_t*)malloc(associativity * block_num * sizeof(uint32_t));
+    tag_core3 = (uint32_t*)malloc(associativity * block_num * sizeof(uint32_t));
+    lru_core0 = (int*)malloc(associativity * block_num * sizeof(int));
+    lru_core1 = (int*)malloc(associativity * block_num * sizeof(int));
+    lru_core2 = (int*)malloc(associativity * block_num * sizeof(int));
+    lru_core3 = (int*)malloc(associativity * block_num * sizeof(int));
 
-    for(int i = 0; i < assocaitivity; i++){
+    for(int i = 0; i < associativity; i++){
         for(int ii = 0; ii < block_num; ii++){
             state_core0[i * block_num + ii] = INVALID;
             state_core1[i * block_num + ii] = INVALID;
@@ -142,7 +142,12 @@ void* MESI_core(void* core_num_pointer)
     long long shared_acc = 0;
 
     char line[100];
+    long line_num = 0;
     while(fgets(line, 100, input_file)){
+        line_num++;
+        if(line_num % 100000 == 0){
+            printf("core%d input file line %ld\n", core_num, line_num);
+        }
         // get inst and addr
         char addr_s[11];
         uint32_t addr;
@@ -168,7 +173,7 @@ void* MESI_core(void* core_num_pointer)
             uint32_t addr_tag = addr >> (offset_bits + index_bits);
             uint32_t addr_index = (addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
-            for(int i = 0; i < assocaitivity; i++){
+            for(int i = 0; i < associativity; i++){
                 if(addr_tag == tag[i * block_num + addr_index] && state[i * block_num + addr_index] != INVALID){
                     hit_flag = i + 1;
                     break;
@@ -180,8 +185,8 @@ void* MESI_core(void* core_num_pointer)
                 cache_miss++;
                 fprintf(log, "cycle %lld: load, tag %x, index %x, cache miss\n", cycle, addr_tag, addr_index);
                 // bus
+                fprintf(log, "cycle %lld: load, start waiting to send BUSRD\n", cycle);
                 while(!bus_send(core_num, BUSRD, addr, 0)){
-                    fprintf(log, "cycle %lld: load, waiting sending BUSRD\n", cycle);
                     int wb = snoop_bus(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
@@ -189,9 +194,9 @@ void* MESI_core(void* core_num_pointer)
                         pthread_barrier_wait(&barrier);
                     }
                 }
+                fprintf(log, "cycle %lld: load, sent BUSRD, start waiting BUSRD ack\n", cycle);
                 // wait for bus ack
                 while(!bus_recv(core_num)){
-                    fprintf(log, "cycle %lld: load, waiting BUSRD ack\n", cycle);
                     int wb = snoop_bus(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
@@ -199,7 +204,30 @@ void* MESI_core(void* core_num_pointer)
                         pthread_barrier_wait(&barrier);
                     }
                 }
-                // wait for data (actually we are writing data back as well but does not matter)
+                fprintf(log, "cycle %lld: load, BUSRD ack\n", cycle);
+                // replace
+                int refill_way = 0;
+                for(int i = 0; i < associativity; i++){
+                    if(lru[i * block_num + addr_index] < lru[refill_way * block_num + addr_index]){
+                        refill_way = i;
+                    }
+                }
+                if(state[refill_way * block_num + addr_index] == MODIFIED){
+                    fprintf(log, "cycle %lld: writing way%d dirty data back\n", cycle, refill_way);
+                    int counter = 100;  
+                    while(counter != 0){
+                        int wb = snoop_bus(core_num, state, tag, NULL);
+                        if(!wb){
+                            cycle++;
+                            mem_idle++;
+                            counter--;
+                            pthread_barrier_wait(&barrier);
+                        }
+                    }
+                    bus_wb++;
+                }
+                // wait for data
+                fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
                     int wb = snoop_bus(core_num, state, tag, NULL);
@@ -211,12 +239,6 @@ void* MESI_core(void* core_num_pointer)
                     }
                 }
                 // refill
-                int refill_way = 0;
-                for(int i = 0; i < assocaitivity; i++){
-                    if(lru[i * block_num + addr_index] < lru[refill_way * block_num + addr_index]){
-                        refill_way = i;
-                    }
-                }
                 state[refill_way * block_num + addr_index] = (check_share(addr_tag, addr_index) == 0) ? EXCLUSIVE : SHARED;
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
@@ -248,7 +270,7 @@ void* MESI_core(void* core_num_pointer)
             uint32_t addr_tag = addr >> (offset_bits + index_bits);
             uint32_t addr_index = (addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
-            for(int i = 0; i < assocaitivity; i++){
+            for(int i = 0; i < associativity; i++){
                 if(addr_tag == tag[i * block_num + addr_index] && state[i * block_num + addr_index] != INVALID){
                     hit_flag = i + 1;
                     break;
@@ -260,8 +282,8 @@ void* MESI_core(void* core_num_pointer)
                 cache_miss++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache miss\n", cycle, addr_tag, addr_index);
                 // bus
+                fprintf(log, "cycle %lld: store, start waiting to send BUSRDX\n", cycle);
                 while(!bus_send(core_num, BUSRDX, addr, 0)){
-                    fprintf(log, "cycle %lld: store, waiting sending BUSRDX\n", cycle);
                     int wb = snoop_bus(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
@@ -269,9 +291,9 @@ void* MESI_core(void* core_num_pointer)
                         pthread_barrier_wait(&barrier);
                     }
                 }
+                fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
                 // wait for bus ack
                 while(!bus_recv(core_num)){
-                    fprintf(log, "cycle %lld: store, waiting BUSRDX ack\n", cycle);
                     int wb = snoop_bus(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
@@ -279,7 +301,30 @@ void* MESI_core(void* core_num_pointer)
                         pthread_barrier_wait(&barrier);
                     }
                 }
+                fprintf(log, "cycle %lld: store, BUSRDX ack\n", cycle);
+                // replace
+                int refill_way = 0;
+                for(int i = 0; i < associativity; i++){
+                    if(lru[i * block_num + addr_index] < lru[refill_way * block_num + addr_index]){
+                        refill_way = i;
+                    }
+                }
+                if(state[refill_way * block_num + addr_index] == MODIFIED){
+                    fprintf(log, "cycle %lld: writing way%d dirty data back\n", cycle, refill_way);
+                    int counter = 100;  
+                    while(counter != 0){
+                        int wb = snoop_bus(core_num, state, tag, NULL);
+                        if(!wb){
+                            cycle++;
+                            mem_idle++;
+                            counter--;
+                            pthread_barrier_wait(&barrier);
+                        }
+                    }
+                    bus_wb++;
+                }                
                 // wait for data
+                fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
                     int wb = snoop_bus(core_num, state, tag, NULL);
@@ -291,12 +336,6 @@ void* MESI_core(void* core_num_pointer)
                     }
                 }
                 // refill
-                int refill_way = 0;
-                for(int i = 0; i < assocaitivity; i++){
-                    if(lru[i * block_num + addr_index] < lru[refill_way * block_num + addr_index]){
-                        refill_way = i;
-                    }
-                }
                 state[refill_way * block_num + addr_index] = MODIFIED; 
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
@@ -306,8 +345,8 @@ void* MESI_core(void* core_num_pointer)
                 cache_hit++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in S state\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 // busrdx
+                fprintf(log, "cycle %lld: store, start waiting to send BUSRDX\n", cycle);
                 while(!bus_send(core_num, BUSRDX, addr, 0)){
-                    fprintf(log, "cycle %lld: store, waiting sending BUSRDX\n", cycle);
                     int wb = snoop_bus(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
@@ -316,8 +355,8 @@ void* MESI_core(void* core_num_pointer)
                     }
                 }
                 // wait for bus ack
+                fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
                 while(!bus_recv(core_num)){
-                    fprintf(log, "cycle %lld: store, waiting BUSRDX ack\n", cycle);
                     int wb = snoop_bus(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
@@ -384,7 +423,7 @@ void* MESI_core(void* core_num_pointer)
 int check_share(uint32_t tag, uint32_t index)
 {
     int ret = 0;
-    for(int i = 0; i < assocaitivity; i++){
+    for(int i = 0; i < associativity; i++){
         if(state_core0[i * block_num + index] != INVALID && tag_core0[i * block_num + index] == tag){
             ret++;
         }
