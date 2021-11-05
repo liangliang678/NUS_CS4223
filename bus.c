@@ -119,6 +119,11 @@ int snoop_bus(int core_num, int* state, uint32_t* tag, long long* cycle)
     return ret;
 }
 
+void bus_upd(){
+    // TO DO
+    return;
+}
+
 int bus_recv(int core_num)
 {
     return (bus[core_num].recv[0] && bus[core_num].recv[1] && bus[core_num].recv[2] && bus[core_num].recv[3]);

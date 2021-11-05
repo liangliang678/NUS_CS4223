@@ -15,6 +15,11 @@
 #define BUSRD 1
 #define BUSRDX 2
 
+#define E 1
+#define Sc 2
+#define Sm 3
+#define M 4
+
 typedef struct bus_t{
     int busy;
     int recv[4];
@@ -48,6 +53,7 @@ extern long long bus_inv;
 extern void simulate_MESI();
 extern void* MESI_core(void* core_num_pointer);
 extern void simulate_Dragon();
+extern void* DRAGON_core(void* core_num_pointer);
 
 extern int check_share(uint32_t tag, uint32_t index);
 
@@ -55,5 +61,6 @@ extern int bus_send(int core_num, int tran, uint32_t addr, int len);
 extern int snoop_bus(int core_num, int* state, uint32_t* tag, long long* cycle);
 extern int bus_recv(int core_num);
 extern void bus_cancle(int core_num);
+extern void bus_upd();
 
 #endif
