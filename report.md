@@ -2,7 +2,21 @@
 
 ## Introduction
 
+In this assignment we implemented a simulator for cache coherence protocols. We used C for programming, gcc for compiling. The platform is x86_64 GNU/Linux and we used pthread library for shared memory parallel programming. We used shared memory parallel programming because using one thread to simulate one core is more elegant. If we manipulate cache states of 4 cores in one thread the concept of "bus transaction" is not clear and it will probably eliminate randomness of accessing bus.
+
 ## Implementation
+
+### Parse Input
+
+### Initiate Simulation
+
+### Bus Structure
+
+### MESI Simulation
+
+Every thread has its private virable `cycle`. Our 4 cores must be in the same cycle at all time, so the synchronization is important. Every time we call `cycle++`, we call `pthread_barrier_wait()` subsequently. In this way every core is in the same cycle, but there is certain overhead. If we do a lot of operations in one cycle, the overhead is relatively small. Because we only simulate cache states, the overhead is obvious and the simulation is slow. But this approch adds more scalability to the simulation program because if we want to simulate more (e.g. register file context), the simulation will be faster than serial program.
+
+
 
 ## Result
 
