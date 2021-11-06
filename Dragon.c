@@ -157,7 +157,7 @@ void* DRAGON_core(void* core_num_pointer)
 
         // wait until inst being issued
         while(cycle < next_inst){
-            int wb = snoop_bus(core_num, state, tag, &cycle);
+            int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
             if(!wb){
                 cycle++;
                 pthread_barrier_wait(&barrier);
@@ -185,7 +185,7 @@ void* DRAGON_core(void* core_num_pointer)
                 // bus
                 fprintf(log, "cycle %lld: load, start waiting to send BUSRD\n", cycle);
                 while(!bus_send(core_num, BUSRD, addr, 0)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -195,7 +195,7 @@ void* DRAGON_core(void* core_num_pointer)
                 fprintf(log, "cycle %lld: load, sent BUSRD, start waiting BUSRD ack\n", cycle);
                 // wait for bus ack
                 while(!bus_recv(core_num)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -215,7 +215,7 @@ void* DRAGON_core(void* core_num_pointer)
                 fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
-                    int wb = snoop_bus(core_num, state, tag, NULL);
+                    int wb = snoop_bus_dragon(core_num, state, tag, NULL);
                     if(!wb){
                         cycle++;
                         mem_idle++;
@@ -229,7 +229,7 @@ void* DRAGON_core(void* core_num_pointer)
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
                 bus_cancle(core_num); 
-                if(state[refill_way * block_num + addr_index] == SHARED){
+                if(state[refill_way * block_num + addr_index] == Sm || state[refill_way * block_num + addr_index] == Sc){
                     shared_acc++;
                 }
                 else{
@@ -241,14 +241,12 @@ void* DRAGON_core(void* core_num_pointer)
                 cache_hit++;
                 fprintf(log, "cycle %lld: load, tag %x, index %x, cache hit way %d\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 lru[(hit_flag - 1) * block_num + addr_index]++;
-                // ????????????????????
-                if(state[(hit_flag - 1) * block_num + addr_index] == SHARED){
+                if(state[refill_way * block_num + addr_index] == Sm || state[refill_way * block_num + addr_index] == Sc){
                     shared_acc++;
                 }
                 else{
                     private_acc++;
                 }
-                // ????????????????????
             }
             next_inst = cycle + 1;
         }
@@ -270,44 +268,63 @@ void* DRAGON_core(void* core_num_pointer)
                 cache_miss++;
                 fprintf(log, "cycle %lld: store, tag %x, index %x, cache miss\n", cycle, addr_tag, addr_index);
                 // bus
-                fprintf(log, "cycle %lld: store, start waiting to send BUSRDX\n", cycle);
-                while(!bus_send(core_num, BUSRDX, addr, 0)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                fprintf(log, "cycle %lld: store, start waiting to send BUSRD\n", cycle);
+                while(!bus_send(core_num, BUSRD, addr, 0)){
+                    int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
                     }
                 }
-                fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
+                fprintf(log, "cycle %lld: store, sent BUSRD, start waiting BUSRD ack\n", cycle);
                 // wait for bus ack
                 while(!bus_recv(core_num)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
                     }
                 }
-                fprintf(log, "cycle %lld: store, BUSRDX ack\n", cycle);
-                // replace
-                int refill_way = 0;
-                for(int i = 0; i < associativity; i++){
-                    if(lru[i * block_num + addr_index] < lru[refill_way * block_num + addr_index]){
-                        refill_way = i;
-                    }
-                }
-                
                 // wait for data
                 fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
-                    int wb = snoop_bus(core_num, state, tag, NULL);
+                    int wb = snoop_bus_dragon(core_num, state, tag, NULL);
                     if(!wb){
                         cycle++;
                         mem_idle++;
                         counter--;
                         pthread_barrier_wait(&barrier);
+                    }
+                }
+
+                fprintf(log, "cycle %lld: store, start waiting to send BUSUPD\n", cycle);
+                while(!bus_send(core_num, BUSUPD, addr, 4)){
+                    int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
+                    if(!wb){
+                        cycle++;
+                        bus_idle++;
+                        pthread_barrier_wait(&barrier);
+                    }
+                }
+                fprintf(log, "cycle %lld: store, sent BUSUPD, start waiting BUSUPD ack\n", cycle);
+                // wait for bus ack
+                while(!bus_recv(core_num)){
+                    int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
+                    if(!wb){
+                        cycle++;
+                        bus_idle++;
+                        pthread_barrier_wait(&barrier);
+                    }
+                }
+                fprintf(log, "cycle %lld: store, BUSUPD ack\n", cycle);
+                // replace
+                int refill_way = 0;
+                for(int i = 0; i < associativity; i++){
+                    if(lru[i * block_num + addr_index] < lru[refill_way * block_num + addr_index]){
+                        refill_way = i;
                     }
                 }
                 // refill
@@ -319,20 +336,39 @@ void* DRAGON_core(void* core_num_pointer)
             else if(state[(hit_flag - 1) * block_num + addr_index] == M){
                 // Nothing happens
                 cache_hit++;
-                fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in E state\n", cycle, addr_tag, addr_index, hit_flag - 1);
+                fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in M state\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 state[(hit_flag - 1) * block_num + addr_index] = M; 
                 lru[(hit_flag - 1) * block_num + addr_index]++;
             }
             else if(state[(hit_flag - 1) * block_num + addr_index] == Sm){
                 cache_hit++;
-                fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in E state\n", cycle, addr_tag, addr_index, hit_flag - 1);
+                fprintf(log, "cycle %lld: store, tag %x, index %x, cache hit way %d in Sm state\n", cycle, addr_tag, addr_index, hit_flag - 1);
                 if (check_share(addr_tag, addr_index) == 0){
                     // shared line is not asserted
                     state[(hit_flag - 1) * block_num + addr_index] = M; 
                     lru[(hit_flag - 1) * block_num + addr_index]++;
                 }else{
                     // shared line is asserted
-                    bus_upd();
+                    fprintf(log, "cycle %lld: store, start waiting to send BUSUPD\n", cycle);
+                    while(!bus_send(core_num, BUSUPD, addr, 4)){
+                        int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
+                        if(!wb){
+                            cycle++;
+                            bus_idle++;
+                            pthread_barrier_wait(&barrier);
+                        }
+                    }
+                    fprintf(log, "cycle %lld: store, sent BUSUPD, start waiting BUSUPD ack\n", cycle);
+                    // wait for bus ack
+                    while(!bus_recv(core_num)){
+                        int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
+                        if(!wb){
+                            cycle++;
+                            bus_idle++;
+                            pthread_barrier_wait(&barrier);
+                        }
+                    }
+                    fprintf(log, "cycle %lld: store, BUSUPD ack\n", cycle);
                     state[(hit_flag - 1) * block_num + addr_index] = Sm; 
                     lru[(hit_flag - 1) * block_num + addr_index]++;
                 }
@@ -347,7 +383,26 @@ void* DRAGON_core(void* core_num_pointer)
                     lru[(hit_flag - 1) * block_num + addr_index]++;
                 }else{
                     // shared line is asserted
-                    bus_upd();
+                    fprintf(log, "cycle %lld: store, start waiting to send BUSUPD\n", cycle);
+                    while(!bus_send(core_num, BUSUPD, addr, 4)){
+                        int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
+                        if(!wb){
+                            cycle++;
+                            bus_idle++;
+                            pthread_barrier_wait(&barrier);
+                        }
+                    }
+                    fprintf(log, "cycle %lld: store, sent BUSUPD, start waiting BUSUPD ack\n", cycle);
+                    // wait for bus ack
+                    while(!bus_recv(core_num)){
+                        int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
+                        if(!wb){
+                            cycle++;
+                            bus_idle++;
+                            pthread_barrier_wait(&barrier);
+                        }
+                    }
+                    fprintf(log, "cycle %lld: store, BUSUPD ack\n", cycle);
                     state[(hit_flag - 1) * block_num + addr_index] = Sm; 
                     lru[(hit_flag - 1) * block_num + addr_index]++;
                 }
@@ -367,7 +422,7 @@ void* DRAGON_core(void* core_num_pointer)
     }
     
     while(cycle < next_inst){
-        int wb = snoop_bus(core_num, state, tag, &cycle);
+        int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
         if(!wb){
             cycle++;
             pthread_barrier_wait(&barrier);
@@ -386,7 +441,7 @@ void* DRAGON_core(void* core_num_pointer)
     pthread_mutex_unlock(&mutex_finish);
 
     do{
-        int wb = snoop_bus(core_num, state, tag, &cycle);
+        int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
         if(!wb){
             cycle++;
             pthread_barrier_wait(&barrier);
