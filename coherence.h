@@ -56,8 +56,6 @@ extern void* MESI_core(void* core_num_pointer);
 extern void simulate_Dragon();
 extern void* DRAGON_core(void* core_num_pointer);
 
-extern int check_share(uint32_t tag, uint32_t index);
-
 // send a transaction to bus
 extern int bus_send(int core_num, int tran, uint32_t addr, int len);
 // snoop the bus to check if there is new transactions

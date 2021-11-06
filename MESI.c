@@ -20,9 +20,29 @@ int* lru_core3;
 
 pthread_barrier_t barrier;
 
-int finish = 0;
-pthread_mutex_t mutex_finish;
+int finish_MESI = 0;
+pthread_mutex_t mutex_finish_MESI;
 long long max_cycle;
+
+int check_share_MESI(uint32_t tag, uint32_t index)
+{
+    int ret = 0;
+    for(int i = 0; i < associativity; i++){
+        if(state_core0[i * block_num + index] != INVALID && tag_core0[i * block_num + index] == tag){
+            ret++;
+        }
+        if(state_core1[i * block_num + index] != INVALID && tag_core1[i * block_num + index] == tag){
+            ret++;
+        }
+        if(state_core2[i * block_num + index] != INVALID && tag_core2[i * block_num + index] == tag){
+            ret++;
+        }
+        if(state_core3[i * block_num + index] != INVALID && tag_core3[i * block_num + index] == tag){
+            ret++;
+        }
+    }
+    return ret;
+}
 
 void simulate_MESI()
 {
@@ -70,7 +90,7 @@ void simulate_MESI()
 
     // spawn 4 thread
     pthread_mutex_init(&mutex_bus, NULL);
-    pthread_mutex_init(&mutex_finish, NULL);
+    pthread_mutex_init(&mutex_finish_MESI, NULL);
     pthread_barrier_init(&barrier, NULL, 4);
     pthread_t core0, core1, core2, core3;
     int arg_core0 = 0, arg_core1 = 1, arg_core2 = 2, arg_core3 = 3;
@@ -79,12 +99,12 @@ void simulate_MESI()
     pthread_create(&core2, NULL, MESI_core, &arg_core2);
     pthread_create(&core3, NULL, MESI_core, &arg_core3);
 
-    // simulation finished
+    // simulation finish_MESIed
     pthread_join(core0, NULL);
     pthread_join(core1, NULL);
     pthread_join(core2, NULL);
     pthread_join(core3, NULL);
-    printf("> simulation finished at cycle %lld.\n", max_cycle);
+    printf("> simulation finish_MESIed at cycle %lld.\n", max_cycle);
     printf("> bus_wb: %lld, bus_inv: %lld\n", bus_wb, bus_inv);
 }
 
@@ -239,7 +259,7 @@ void* MESI_core(void* core_num_pointer)
                     }
                 }
                 // refill
-                state[refill_way * block_num + addr_index] = (check_share(addr_tag, addr_index) == 0) ? EXCLUSIVE : SHARED;
+                state[refill_way * block_num + addr_index] = (check_share_MESI(addr_tag, addr_index) == 0) ? EXCLUSIVE : SHARED;
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
                 bus_cancle(core_num);
@@ -396,16 +416,16 @@ void* MESI_core(void* core_num_pointer)
         }
     }
     
-    printf("> core%d finish at cycle %lld\n", core_num, cycle);
+    printf("> core%d finish_MESI at cycle %lld\n", core_num, cycle);
     printf("> core%d compute_cycle: %lld, bus_idle: %lld, mem_idle: %lld\n", core_num, compute_cycle, bus_idle, mem_idle);
     printf("> core%d load_inst_num: %lld, store_inst_num: %lld\n", core_num, load_inst_num, store_inst_num);
     printf("> core%d private_acc: %lld, shared_acc: %lld\n", core_num, private_acc, shared_acc);
     printf("> core%d cache_hit: %lld, cache_miss: %lld, hit_rate: %lf\n", core_num, cache_hit, cache_miss, cache_hit * 1.0 / (cache_hit + cache_miss));
 
-    pthread_mutex_lock(&mutex_finish);
-    finish++;
+    pthread_mutex_lock(&mutex_finish_MESI);
+    finish_MESI++;
     max_cycle = cycle;
-    pthread_mutex_unlock(&mutex_finish);
+    pthread_mutex_unlock(&mutex_finish_MESI);
 
     do{
         int wb = snoop_bus(core_num, state, tag, &cycle);
@@ -414,28 +434,8 @@ void* MESI_core(void* core_num_pointer)
             pthread_barrier_wait(&barrier);
         }
         
-    } while(finish != 4);
+    } while(finish_MESI != 4);
 
     fclose(log);
     pthread_exit(NULL);
-}
-
-int check_share(uint32_t tag, uint32_t index)
-{
-    int ret = 0;
-    for(int i = 0; i < associativity; i++){
-        if(state_core0[i * block_num + index] != INVALID && tag_core0[i * block_num + index] == tag){
-            ret++;
-        }
-        if(state_core1[i * block_num + index] != INVALID && tag_core1[i * block_num + index] == tag){
-            ret++;
-        }
-        if(state_core2[i * block_num + index] != INVALID && tag_core2[i * block_num + index] == tag){
-            ret++;
-        }
-        if(state_core3[i * block_num + index] != INVALID && tag_core3[i * block_num + index] == tag){
-            ret++;
-        }
-    }
-    return ret;
 }

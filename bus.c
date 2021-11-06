@@ -183,7 +183,7 @@ int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle)
                 }
                 else if(state[(hit_flag - 1) * block_num + bus_index] == Sc){
                     if(cycle){
-                        int counter = int(bus[i].len/4 * 2);
+                        int counter = (int)(bus[i].len/4 * 2);
                         pthread_mutex_unlock(&mutex_bus);
                         while(counter != 0){
                             (*cycle)++;
