@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <pthread.h>
 #include "coherence.h"
 
 int* state_core0;
@@ -39,12 +41,10 @@ void simulate_Dragon(){
 
     for(int i = 0; i < associativity; i++){
         for(int ii = 0; ii < block_num; ii++){
-            // ????????????????????
             state_core0[i * block_num + ii] = INVALID;
             state_core1[i * block_num + ii] = INVALID;
             state_core2[i * block_num + ii] = INVALID;
             state_core3[i * block_num + ii] = INVALID;
-            // ????????????????????
             tag_core0[i * block_num + ii] = 0;
             tag_core1[i * block_num + ii] = 0;
             tag_core2[i * block_num + ii] = 0;
@@ -170,7 +170,6 @@ void* DRAGON_core(void* core_num_pointer)
             uint32_t addr_tag = addr >> (offset_bits + index_bits);
             uint32_t addr_index = (addr & INDEX_MASK) >> offset_bits;
             int hit_flag = 0;
-            // ????????????????????
             for(int i = 0; i < associativity; i++){
                 if(addr_tag == tag[i * block_num + addr_index] && state[i * block_num + addr_index] != INVALID){
                     hit_flag = i + 1;
@@ -229,7 +228,6 @@ void* DRAGON_core(void* core_num_pointer)
                 state[refill_way * block_num + addr_index] = (check_share(addr_tag, addr_index) == 0) ? E : Sc;
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
-                // ????????????????????
                 bus_cancle(core_num); 
                 if(state[refill_way * block_num + addr_index] == SHARED){
                     shared_acc++;
@@ -237,7 +235,6 @@ void* DRAGON_core(void* core_num_pointer)
                 else{
                     private_acc++;
                 }
-                // ????????????????????
             }
             // if cache hit, update lru
             else {
@@ -314,13 +311,10 @@ void* DRAGON_core(void* core_num_pointer)
                     }
                 }
                 // refill
-                // ????????????????????
                 state[refill_way * block_num + addr_index] = (check_share(addr_tag, addr_index) == 0) ? M : Sm; 
                 tag[refill_way * block_num + addr_index] = addr_tag;
                 lru[refill_way * block_num + addr_index] = 0;
-                // ????????????????????
                 bus_cancle(core_num);
-                // ????????????????????
             }
             else if(state[(hit_flag - 1) * block_num + addr_index] == M){
                 // Nothing happens

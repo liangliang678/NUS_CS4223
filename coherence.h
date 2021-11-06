@@ -14,11 +14,12 @@
 
 #define BUSRD 1
 #define BUSRDX 2
+#define BUSUPD 3
 
-#define E 1
-#define Sc 2
-#define Sm 3
-#define M 4
+#define E 5
+#define Sc 6
+#define Sm 7
+#define M 8
 
 typedef struct bus_t{
     int busy;
@@ -57,9 +58,13 @@ extern void* DRAGON_core(void* core_num_pointer);
 
 extern int check_share(uint32_t tag, uint32_t index);
 
+// send a transaction to bus
 extern int bus_send(int core_num, int tran, uint32_t addr, int len);
+// snoop the bus to check if there is new transactions
 extern int snoop_bus(int core_num, int* state, uint32_t* tag, long long* cycle);
+// check if all other cores have received transaction it sent
 extern int bus_recv(int core_num);
+// the transaction has been completed
 extern void bus_cancle(int core_num);
 extern void bus_upd();
 
