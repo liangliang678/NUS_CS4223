@@ -319,7 +319,7 @@ void* DRAGON_core(void* core_num_pointer)
                         pthread_barrier_wait(&barrier);
                     }
                 }
-
+                bus_cancle(core_num);
                 fprintf(log, "cycle %lld: store, start waiting to send BUSUPD\n", cycle);
                 while(!bus_send(core_num, BUSUPD, addr, 4)){
                     int wb = snoop_bus_dragon(core_num, state, tag, &cycle);
@@ -391,6 +391,7 @@ void* DRAGON_core(void* core_num_pointer)
                     fprintf(log, "cycle %lld: store, BUSUPD ack\n", cycle);
                     state[(hit_flag - 1) * block_num + addr_index] = Sm; 
                     lru[(hit_flag - 1) * block_num + addr_index]++;
+                    bus_cancle(core_num);
                 }
             }
             // if cache hit, update lru
@@ -425,6 +426,7 @@ void* DRAGON_core(void* core_num_pointer)
                     fprintf(log, "cycle %lld: store, BUSUPD ack\n", cycle);
                     state[(hit_flag - 1) * block_num + addr_index] = Sm; 
                     lru[(hit_flag - 1) * block_num + addr_index]++;
+                    bus_cancle(core_num);
                 }
             }
             else{
