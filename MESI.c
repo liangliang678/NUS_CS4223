@@ -180,7 +180,7 @@ void* MESI_core(void* core_num_pointer)
 
         // wait until inst being issued
         while(cycle < next_inst){
-            int wb = snoop_bus(core_num, state, tag, &cycle);
+            int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
             if(!wb){
                 cycle++;
                 pthread_barrier_wait(&barrier);
@@ -207,7 +207,7 @@ void* MESI_core(void* core_num_pointer)
                 // bus
                 fprintf(log, "cycle %lld: load, start waiting to send BUSRD\n", cycle);
                 while(!bus_send(core_num, BUSRD, addr, 0)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -217,7 +217,7 @@ void* MESI_core(void* core_num_pointer)
                 fprintf(log, "cycle %lld: load, sent BUSRD, start waiting BUSRD ack\n", cycle);
                 // wait for bus ack
                 while(!bus_recv(core_num)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -236,7 +236,7 @@ void* MESI_core(void* core_num_pointer)
                     fprintf(log, "cycle %lld: writing way%d dirty data back\n", cycle, refill_way);
                     int counter = 100;  
                     while(counter != 0){
-                        int wb = snoop_bus(core_num, state, tag, NULL);
+                        int wb = snoop_bus_MESI(core_num, state, tag, NULL);
                         if(!wb){
                             cycle++;
                             mem_idle++;
@@ -250,7 +250,7 @@ void* MESI_core(void* core_num_pointer)
                 fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
-                    int wb = snoop_bus(core_num, state, tag, NULL);
+                    int wb = snoop_bus_MESI(core_num, state, tag, NULL);
                     if(!wb){
                         cycle++;
                         mem_idle++;
@@ -304,7 +304,7 @@ void* MESI_core(void* core_num_pointer)
                 // bus
                 fprintf(log, "cycle %lld: store, start waiting to send BUSRDX\n", cycle);
                 while(!bus_send(core_num, BUSRDX, addr, 0)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -314,7 +314,7 @@ void* MESI_core(void* core_num_pointer)
                 fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
                 // wait for bus ack
                 while(!bus_recv(core_num)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -333,7 +333,7 @@ void* MESI_core(void* core_num_pointer)
                     fprintf(log, "cycle %lld: writing way%d dirty data back\n", cycle, refill_way);
                     int counter = 100;  
                     while(counter != 0){
-                        int wb = snoop_bus(core_num, state, tag, NULL);
+                        int wb = snoop_bus_MESI(core_num, state, tag, NULL);
                         if(!wb){
                             cycle++;
                             mem_idle++;
@@ -347,7 +347,7 @@ void* MESI_core(void* core_num_pointer)
                 fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
-                    int wb = snoop_bus(core_num, state, tag, NULL);
+                    int wb = snoop_bus_MESI(core_num, state, tag, NULL);
                     if(!wb){
                         cycle++;
                         mem_idle++;
@@ -367,7 +367,7 @@ void* MESI_core(void* core_num_pointer)
                 // busrdx
                 fprintf(log, "cycle %lld: store, start waiting to send BUSRDX\n", cycle);
                 while(!bus_send(core_num, BUSRDX, addr, 0)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -377,7 +377,7 @@ void* MESI_core(void* core_num_pointer)
                 // wait for bus ack
                 fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
                 while(!bus_recv(core_num)){
-                    int wb = snoop_bus(core_num, state, tag, &cycle);
+                    int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
                     if(!wb){
                         cycle++;
                         bus_idle++;
@@ -409,7 +409,7 @@ void* MESI_core(void* core_num_pointer)
     }
     
     while(cycle < next_inst){
-        int wb = snoop_bus(core_num, state, tag, &cycle);
+        int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
         if(!wb){
             cycle++;
             pthread_barrier_wait(&barrier);
@@ -428,7 +428,7 @@ void* MESI_core(void* core_num_pointer)
     pthread_mutex_unlock(&mutex_finish_MESI);
 
     do{
-        int wb = snoop_bus(core_num, state, tag, &cycle);
+        int wb = snoop_bus_MESI(core_num, state, tag, &cycle);
         if(!wb){
             cycle++;
             pthread_barrier_wait(&barrier);

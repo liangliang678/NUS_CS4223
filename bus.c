@@ -10,6 +10,7 @@ bus_t bus[4];
 pthread_mutex_t mutex_bus;
 long long bus_wb = 0;
 long long bus_inv = 0;
+long long bus_upd = 0;
 
 // when calling bus_send, the bus of its core must be free
 int bus_send(int core_num, int tran, uint32_t addr, int len)
@@ -42,9 +43,9 @@ int bus_send(int core_num, int tran, uint32_t addr, int len)
     return 1;
 }
 
-// when calling snoop_bus, it may write dirty cache line back to mem and it takes 100 cycles (ret will be 1)
+// when calling snoop_bus_*, it may write dirty cache line back to mem and it takes 100 cycles (ret will be 1)
 // if you do not want it to write back, set cycle to NULL
-int snoop_bus(int core_num, int* state, uint32_t* tag, long long* cycle)
+int snoop_bus_MESI(int core_num, int* state, uint32_t* tag, long long* cycle)
 {
     pthread_mutex_lock(&mutex_bus);
     int ret = 0;
@@ -178,8 +179,20 @@ int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle)
             }
             else if(bus[i].tran == BUSUPD){
                 if(state[(hit_flag - 1) * block_num + bus_index] == Sm){
-                    state[(hit_flag - 1) * block_num + bus_index] = Sc;
-                    bus[i].recv[core_num] = 1;
+                    if(cycle){
+                        int counter = (int)(bus[i].len/4 * 2);
+                        pthread_mutex_unlock(&mutex_bus);
+                        while(counter != 0){
+                            (*cycle)++;
+                            counter--;
+                            pthread_barrier_wait(&barrier);
+                        }
+                        pthread_mutex_lock(&mutex_bus); // Update the main memory
+                        state[(hit_flag - 1) * block_num + bus_index] = Sc;
+                        bus[i].recv[core_num] = 1;
+                        ret = 1;
+                        bus_upd += 4;
+                    }
                 }
                 else if(state[(hit_flag - 1) * block_num + bus_index] == Sc){
                     if(cycle){
@@ -193,6 +206,7 @@ int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle)
                         pthread_mutex_lock(&mutex_bus); // Update the main memory
                         bus[i].recv[core_num] = 1;
                         ret = 1;
+                        bus_upd += 4;
                     }
                 }
             }
