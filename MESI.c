@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <pthread.h>
 #include "coherence.h"
 
 int* state_core0;
@@ -99,13 +94,13 @@ void simulate_MESI()
     pthread_create(&core2, NULL, MESI_core, &arg_core2);
     pthread_create(&core3, NULL, MESI_core, &arg_core3);
 
-    // simulation finish_MESIed
+    // simulation finished
     pthread_join(core0, NULL);
     pthread_join(core1, NULL);
     pthread_join(core2, NULL);
     pthread_join(core3, NULL);
-    printf("> simulation finish_MESIed at cycle %lld.\n", max_cycle);
-    printf("> bus_wb: %lld, bus_inv: %lld\n", bus_wb, bus_inv);
+    printf("> simulation finished at cycle %lld.\n", max_cycle);
+    printf("> bus_rd: %lld, bus_wb: %lld, bus_inv: %lld\n", bus_rd, bus_wb, bus_inv);
 }
 
 void* MESI_core(void* core_num_pointer)
@@ -185,6 +180,9 @@ void* MESI_core(void* core_num_pointer)
                 cycle++;
                 pthread_barrier_wait(&barrier);
             }
+            else{
+                mem_idle += wb;
+            }
         }
 
         // load
@@ -213,6 +211,9 @@ void* MESI_core(void* core_num_pointer)
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
                     }
+                    else{
+                        mem_idle += wb;
+                    }
                 }
                 fprintf(log, "cycle %lld: load, sent BUSRD, start waiting BUSRD ack\n", cycle);
                 // wait for bus ack
@@ -222,6 +223,9 @@ void* MESI_core(void* core_num_pointer)
                         cycle++;
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
+                    }
+                    else{
+                        mem_idle += wb;
                     }
                 }
                 fprintf(log, "cycle %lld: load, BUSRD ack\n", cycle);
@@ -237,31 +241,34 @@ void* MESI_core(void* core_num_pointer)
                     int counter = 100;  
                     while(counter != 0){
                         int wb = snoop_bus_MESI(core_num, state, tag, NULL);
-                        if(!wb){
-                            cycle++;
-                            mem_idle++;
-                            counter--;
-                            pthread_barrier_wait(&barrier);
-                        }
+                        assert(!wb);
+                        cycle++;
+                        mem_idle++;
+                        counter--;
+                        pthread_barrier_wait(&barrier);
                     }
+                    pthread_mutex_lock(&mutex_bus);
                     bus_wb++;
+                    pthread_mutex_unlock(&mutex_bus);
                 }
                 // wait for data
                 fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
                 int counter = 100;  
                 while(counter != 0){
                     int wb = snoop_bus_MESI(core_num, state, tag, NULL);
-                    if(!wb){
-                        cycle++;
-                        mem_idle++;
-                        counter--;
-                        pthread_barrier_wait(&barrier);
-                    }
+                    assert(!wb);
+                    cycle++;
+                    mem_idle++;
+                    counter--;
+                    pthread_barrier_wait(&barrier);
                 }
+                pthread_mutex_lock(&mutex_bus);
+                bus_rd++;
+                pthread_mutex_unlock(&mutex_bus);
                 // refill
                 state[refill_way * block_num + addr_index] = (check_share_MESI(addr_tag, addr_index) == 0) ? EXCLUSIVE : SHARED;
                 tag[refill_way * block_num + addr_index] = addr_tag;
-                lru[refill_way * block_num + addr_index] = 0;
+                lru[refill_way * block_num + addr_index] = 1;
                 bus_cancle(core_num);
                 if(state[refill_way * block_num + addr_index] == SHARED){
                     shared_acc++;
@@ -310,6 +317,9 @@ void* MESI_core(void* core_num_pointer)
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
                     }
+                    else{
+                        mem_idle += wb;
+                    }
                 }
                 fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
                 // wait for bus ack
@@ -319,6 +329,9 @@ void* MESI_core(void* core_num_pointer)
                         cycle++;
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
+                    }
+                    else{
+                        mem_idle += wb;
                     }
                 }
                 fprintf(log, "cycle %lld: store, BUSRDX ack\n", cycle);
@@ -334,31 +347,34 @@ void* MESI_core(void* core_num_pointer)
                     int counter = 100;  
                     while(counter != 0){
                         int wb = snoop_bus_MESI(core_num, state, tag, NULL);
-                        if(!wb){
-                            cycle++;
-                            mem_idle++;
-                            counter--;
-                            pthread_barrier_wait(&barrier);
-                        }
-                    }
-                    bus_wb++;
-                }                
-                // wait for data
-                fprintf(log, "cycle %lld: load, start waiting data to refill\n", cycle);
-                int counter = 100;  
-                while(counter != 0){
-                    int wb = snoop_bus_MESI(core_num, state, tag, NULL);
-                    if(!wb){
+                        assert(!wb);
                         cycle++;
                         mem_idle++;
                         counter--;
                         pthread_barrier_wait(&barrier);
                     }
+                    pthread_mutex_lock(&mutex_bus);
+                    bus_wb++;
+                    pthread_mutex_unlock(&mutex_bus);
+                }                
+                // wait for data
+                fprintf(log, "cycle %lld: store, start waiting data to refill\n", cycle);
+                int counter = 100;  
+                while(counter != 0){
+                    int wb = snoop_bus_MESI(core_num, state, tag, NULL);
+                    assert(!wb);
+                    cycle++;
+                    mem_idle++;
+                    counter--;
+                    pthread_barrier_wait(&barrier);
                 }
+                pthread_mutex_lock(&mutex_bus);
+                bus_rd++;
+                pthread_mutex_unlock(&mutex_bus);
                 // refill
                 state[refill_way * block_num + addr_index] = MODIFIED; 
                 tag[refill_way * block_num + addr_index] = addr_tag;
-                lru[refill_way * block_num + addr_index] = 0;
+                lru[refill_way * block_num + addr_index] = 1;
                 bus_cancle(core_num);
             }
             else if(state[(hit_flag - 1) * block_num + addr_index] == SHARED){
@@ -373,6 +389,9 @@ void* MESI_core(void* core_num_pointer)
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
                     }
+                    else{
+                        mem_idle += wb;
+                    }
                 }
                 // wait for bus ack
                 fprintf(log, "cycle %lld: store, sent BUSRDX, start waiting BUSRDX ack\n", cycle);
@@ -382,6 +401,9 @@ void* MESI_core(void* core_num_pointer)
                         cycle++;
                         bus_idle++;
                         pthread_barrier_wait(&barrier);
+                    }
+                    else{
+                        mem_idle += wb;
                     }
                 }
                 state[(hit_flag - 1) * block_num + addr_index] = MODIFIED; 
@@ -414,9 +436,12 @@ void* MESI_core(void* core_num_pointer)
             cycle++;
             pthread_barrier_wait(&barrier);
         }
+        else{
+            mem_idle += wb;
+        }
     }
     
-    printf("> core%d finish_MESI at cycle %lld\n", core_num, cycle);
+    printf("> core%d finish at cycle %lld\n", core_num, cycle);
     printf("> core%d compute_cycle: %lld, bus_idle: %lld, mem_idle: %lld\n", core_num, compute_cycle, bus_idle, mem_idle);
     printf("> core%d load_inst_num: %lld, store_inst_num: %lld\n", core_num, load_inst_num, store_inst_num);
     printf("> core%d private_acc: %lld, shared_acc: %lld\n", core_num, private_acc, shared_acc);
@@ -433,7 +458,9 @@ void* MESI_core(void* core_num_pointer)
             cycle++;
             pthread_barrier_wait(&barrier);
         }
-        
+        else{
+            mem_idle += wb;
+        }
     } while(finish_MESI != 4);
 
     fclose(log);

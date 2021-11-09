@@ -1,13 +1,8 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-#include <pthread.h>
-#include <assert.h>
 #include "coherence.h"
 
 bus_t bus[4];
 pthread_mutex_t mutex_bus;
+long long bus_rd = 0;
 long long bus_wb = 0;
 long long bus_inv = 0;
 long long bus_upd = 0;
@@ -76,16 +71,16 @@ int snoop_bus_MESI(int core_num, int* state, uint32_t* tag, long long* cycle)
                         }
                         pthread_mutex_lock(&mutex_bus);
                         state[(hit_flag - 1) * block_num + bus_index] = SHARED;
-                        bus_wb++;
                         bus[i].recv[core_num] = 1;
-                        ret = 1;
+                        ret = 100;
+                        bus_wb++;
                     }
                 }
                 else if(state[(hit_flag - 1) * block_num + bus_index] == EXCLUSIVE){
                     state[(hit_flag - 1) * block_num + bus_index] = SHARED;
                     bus[i].recv[core_num] = 1;
                 }
-                else{
+                else{ // SHARED
                     bus[i].recv[core_num] = 1;
                 }
             }
@@ -101,13 +96,13 @@ int snoop_bus_MESI(int core_num, int* state, uint32_t* tag, long long* cycle)
                         }
                         pthread_mutex_lock(&mutex_bus);
                         state[(hit_flag - 1) * block_num + bus_index] = INVALID;
+                        bus[i].recv[core_num] = 1;
+                        ret = 100;
                         bus_wb++;
                         bus_inv++;
-                        bus[i].recv[core_num] = 1;
-                        ret = 1;
                     }
                 }
-                else{
+                else{ // SHARED or EXCLUSIVE
                     state[(hit_flag - 1) * block_num + bus_index] = INVALID;
                     bus[i].recv[core_num] = 1;
                     bus_inv++;
@@ -150,9 +145,9 @@ int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle)
                         }
                         pthread_mutex_lock(&mutex_bus); // Update the main memory
                         state[(hit_flag - 1) * block_num + bus_index] = Sm;
-                        bus_wb++;
                         bus[i].recv[core_num] = 1;
-                        ret = 1;
+                        ret = 100;
+                        bus_wb++;
                     }
                 }else if(state[(hit_flag - 1) * block_num + bus_index] == Sm){
                     if(cycle){
@@ -164,50 +159,26 @@ int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle)
                             pthread_barrier_wait(&barrier);
                         }
                         pthread_mutex_lock(&mutex_bus); // Update the main memory
-                        state[(hit_flag - 1) * block_num + bus_index] = Sm;
-                        bus_wb++;
                         bus[i].recv[core_num] = 1;
-                        ret = 1;
+                        ret = 100;
+                        bus_wb++;
                     }
                 }else if(state[(hit_flag - 1) * block_num + bus_index] == Sc || state[(hit_flag - 1) * block_num + bus_index] == E) {
                     state[(hit_flag - 1) * block_num + bus_index] = Sc;
                     bus[i].recv[core_num] = 1;
                 }
-                else{
+                else{ // INVALID
                     bus[i].recv[core_num] = 1;
                 }
             }
             else if(bus[i].tran == BUSUPD){
-                if(state[(hit_flag - 1) * block_num + bus_index] == Sm){
-                    if(cycle){
-                        int counter = (int)(bus[i].len/4 * 2);
-                        pthread_mutex_unlock(&mutex_bus);
-                        while(counter != 0){
-                            (*cycle)++;
-                            counter--;
-                            pthread_barrier_wait(&barrier);
-                        }
-                        pthread_mutex_lock(&mutex_bus); // Update the main memory
-                        state[(hit_flag - 1) * block_num + bus_index] = Sc;
-                        bus[i].recv[core_num] = 1;
-                        ret = 1;
-                        bus_upd += 4;
-                    }
+                if(state[(hit_flag - 1) * block_num + bus_index] == Sc || state[(hit_flag - 1) * block_num + bus_index] == Sm){
+                    state[(hit_flag - 1) * block_num + bus_index] = Sc;
+                    bus[i].recv[core_num] = 1;
+                    bus_upd += bus[i].len;
                 }
-                else if(state[(hit_flag - 1) * block_num + bus_index] == Sc){
-                    if(cycle){
-                        int counter = (int)(bus[i].len/4 * 2);
-                        pthread_mutex_unlock(&mutex_bus);
-                        while(counter != 0){
-                            (*cycle)++;
-                            counter--;
-                            pthread_barrier_wait(&barrier);
-                        }
-                        pthread_mutex_lock(&mutex_bus); // Update the main memory
-                        bus[i].recv[core_num] = 1;
-                        ret = 1;
-                        bus_upd += 4;
-                    }
+                else{
+                    bus[i].recv[core_num] = 1;
                 }
             }
         }

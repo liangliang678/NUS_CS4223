@@ -29,11 +29,11 @@ typedef struct bus_t{
 } bus_t;
 ```
 
-`busy` indicates whether there is a bus transaction ongoing. `Recv[core_num]` indicates whether core `core_num` has received this bus transaction and has done what it ought to be done. `tran` is eithre `BUSRD` or `BUSRDX` or `BUSUPD`. `addr` and `len` is self-explained.
+`busy` indicates whether there is a bus transaction ongoing. `Recv[core_num]` indicates whether core `core_num` has received this bus transaction and has done what it ought to do. `tran` is eithre `BUSRD` or `BUSRDX` or `BUSUPD`. `addr` and `len` is self-explained.
 
 The function `int bus_send(int core_num, int tran, uint32_t addr, int len)` is used to send a bus transaction. We need to ensure that core `core_num` does not has pending bus transaction when calling this function.
 
-The function `int snoop_bus_*(int core_num, int* state, uint32_t* tag, long long* cycle)` is used to check if there are new bus transactions. If yes, state and tag of its core will be modified accordingly. Because dirty data may need to be written back to memory in `snoop_bus_*()`, which takes 100 cycles, we also pass pointer to `cycle` into this function. If we want to disable writing back (because there is only one memory portion for each core), we can set `cycle = NULL`.
+The function `int snoop_bus_*(int core_num, int* state, uint32_t* tag, long long* cycle)` is used to check if there are new bus transactions. If yes, state and tag of its core will be modified accordingly. Because dirty data may need to be written back to memory in `snoop_bus_*()`, which takes 100 cycles, we also pass pointer to `cycle` into this function. If we want to disable writing back (because there is only one memory portion for each core), we can set `cycle = NULL`. The return value will be cycle elapsed.
 
 The function `int bus_recv(int core_num)` is used to check if every other cores have received the pending bus transaction. The function `void bus_cancle(int core_num)` is used to complete a pending bus transaction.
 
@@ -45,13 +45,9 @@ Every thread has its private virable `cycle`. Our 4 cores must be in the same cy
 
 ### MESI Simulation
 
-When a load is issued, we first check whether it hit cache and which way does it hit. If cache miss occurs, we need to send `BUSRD` to bus. If the evicted cache line is dirty, we need to write it back to the main memory before receiving data from main memory and refill the cache line.
+When a load is issued, we first check whether it hit cache and which way does it hit. If cache miss occurs, we need to send `BUSRD` to bus. If the evicted cache line is dirty, we need to write it back to the main memory before receiving data from main memory and refill the cache line. The state will be `EXCLUSIVE` or `SHARED`. If cache hit, there is not much we need to do. The only thing is to modify lru counter and performance counters.
 
-If cache hit, there is not much we need to do. The only thing is to modify lru counter and performance counters.
-
-When a store is issued, we first check whether it hit cache and which way does it hit. If cache miss occurs, we need to send `BUSRDX` to bus. If the evicted cache line is dirty, we need to write it back to the main memory before receiving data from main memory and refill the cache line.
-
-If cache hit the cache line with `SHARED` state, we need to send `BUSRDX` to bus and modify its state to `MODIFIED`. If cache hit the cache line with `EXCLUSIVE` state, we need to modify the state to `MODIFIED` but do not need to send bus transacion.
+When a store is issued, we first check whether it hit cache and which way does it hit. If cache miss occurs, we need to send `BUSRDX` to bus. If the evicted cache line is dirty, we need to write it back to the main memory before receiving data from main memory and refill the cache line. The state will be `MODIFIED`. If cache hit the cache line with `SHARED` state, we need to send `BUSRDX` to bus and modify its state to `MODIFIED`. If cache hit the cache line with `EXCLUSIVE` state, we need to modify the state to `MODIFIED` but do not need to send bus transacion.
 
 In `snoop_bus_MESI()`, we first check whether the address in bus transaction hit cache and which way does it hit. If the bus transaction is `BUSRD`, we have following situations:
 - cache state is `MODIFIED`: we need to write dirty data back to main memory and turn into `INVALID` state.
@@ -65,134 +61,45 @@ If the bus transaction is `BUSRDX`, we have following situations:
 TODO
 
 ## Result
+
+We have created a small testbench to check the correctness of our simulation program. In this test bench, at cycle 0, all 4 cores want to load/store the same address. After this, core0 will store to memory blocks which have same index but different tags. So conflict miss will occur in core0.
+
+### Correctness of MESI
+
+After execute following command, we can check the log file under `output` directory and the output infomation in command line.
+```shell
+./coherence MESI small 8192 2 32
+```
+
+Core3 executed first memory instruction first. It sent BUSRDX at cycle 0 and received ack at cycle 1. At cycle 101 the data from memory had arrived at cache and at cycle 102 data_ok is returned to processor.
+
+Core0 executed first memory instruction second. It sent BUSRD at cycle 102, but this time it need to wait until core3 write its dirty data back before reading from memory. So core0 received ack for BUSRD at cycle 203 which means data is up-to-date in memeory. At cycle 303 the data from memory had arrived at cache and at cycle 304 data is returned to processor.
+
+Core1 executed first memory instruction thrid. It sent BUSRD at cycle 303 and received ack at cycle 304. At cycle 404 the data from memory had arrived at cache and at cycle 405 data is returned to processor.
+
+Core2 executed first memory instruction last. It sent BUSRDX at cycle 404 and received ack at cycle 406. In cycle 405 core3 checked for ack before other cores called `snoop_bus()`, so this introduced 1 cycle delay. At cycle 506 the data from memory had arrived at cache and at cycle 507 data_ok is returned to processor.
+
+Core1 continued and caused 2 write-back when replacing. Overall there is 8 bus read, 3 bus write-back and 3 bus invalidation. The result is as expected. But because bus uses first come first serve arbitration policy, the result will vary between test to test.
+
+### Correctness of Dragon
+
+After execute following command, we can check the log file under `output` directory and the output infomation in command line.
+```shell
+./coherence Dragon small 8192 2 32
+```
+
+Core0 executed first memory instruction first. It sent BUSRD at cycle 0 and received ack at cycle 1. At cycle 101 the data from memory had arrived at cache and at cycle 102 data_ok is returned to processor.
+
+Core3 executed first memory instruction second. It sent BUSRD at ctcle 101 and received ack at cycle 103. At cycle 203 the data from memory had arrived at cache and it sent BUDUPD. At cycle 205 data is been updated in core0. At cycle 206 data_ok is returned to processor.
+
+Core2 executed first memory instruction third. It send BUSRD at cycle 206 and receied ack at cycle 307 because it need to wait until dirty data in core3 be written back. At cycle 407 the data had been fetched and it sent BUSUPD, and at cycle 409 data is been updated in core0 and core3. (Acutall at cycle 408 this memory block in core 0 has been replaced by new memory block, but at clcle 407 core0 has been ready to receive the data, so the data is received by core0 but dropped) At cycle 410 data_ok is returned to processor.
+
+Core1 executed first memory instruction last. It sent BUSRD at ctcle 409 and received ack at cycle 511 because it need to wait until dirty data in core2 be written back. At cycle 611 the data had been fetched and at cycle 612 the data had been returned to processor.
+
+Core1 continued and caused 2 write-back when replacing. Overall there is 8 bus read, 4 bus write-back and 12 bytes bus update. The result is as expected. But because bus uses first come first serve arbitration policy, the result will vary between test to test.
+
+### Quantitative Analysis
 TODO
 
-./coherence MESI bodytrack 8192 2 32
-
-```
-> set protocol: MESI
-> opening bodytrack_four/*
-> successfully opened 4 input files
-> cache_size: 8192 Bytes
-> associativity: 2
-> block_size: 32 Bytes
-> simulation init...
-> core0 init...
-> core1 init...
-> core2 init...
-> core3 init...
-
-> core2 finish at cycle 18797172
-> core2 compute_cycle: 17556877, bus_idle: 24370, mem_idle: 1094200
-> core2 load_inst_num: 74523, store_inst_num: 43175
-> core2 private_acc: 50584, shared_acc: 23939
-> core2 cache_hit: 109212, cache_miss: 8486, hit_rate: 0.927900
-
-> core1 finish at cycle 42471023
-> core1 compute_cycle: 17120545, bus_idle: 310712, mem_idle: 21733700
-> core1 load_inst_num: 2388005, store_inst_num: 899247
-> core1 private_acc: 1644258, shared_acc: 743747
-> core1 cache_hit: 3096487, cache_miss: 190765, hit_rate: 0.941968
-> 
-> core0 finish at cycle 42650765
-> core0 compute_cycle: 17729254, bus_idle: 339415, mem_idle: 21250400
-> core0 load_inst_num: 2380720, store_inst_num: 889412
-> core0 private_acc: 1619538, shared_acc: 761182
-> core0 cache_hit: 3083020, cache_miss: 187112, hit_rate: 0.942782
-
-> core3 finish at cycle 43244565
-> core3 compute_cycle: 17140113, bus_idle: 356993, mem_idle: 22373400
-> core3 load_inst_num: 2416052, store_inst_num: 908867
-> core3 private_acc: 1595793, shared_acc: 820259
-> core3 cache_hit: 3128834, cache_miss: 196085, hit_rate: 0.941026
-
-> simulation finished at cycle 43244565.
-> bus_wb: 83571, bus_inv: 1466
-```
-
-./coherence MESI blackscholes 8192 2 32
-
-```
-> set protocol: MESI
-> opening blackscholes_four/*
-> successfully opened 4 input files
-> cache_size: 8192 Bytes
-> associativity: 2
-> block_size: 32 Bytes
-> simulation init...
-> core0 init...
-> core1 init...
-> core2 init...
-> core3 init...
-
-> core1 finish_MESI at cycle 15171802
-> core1 compute_cycle: 10383276, bus_idle: 36570, mem_idle: 2256000
-> core1 load_inst_num: 1485857, store_inst_num: 1004611
-> core1 private_acc: 1013546, shared_acc: 472311
-> core1 cache_hit: 2468853, cache_miss: 21615, hit_rate: 0.991321
-
-> core3 finish_MESI at cycle 15215710
-> core3 compute_cycle: 10394904, bus_idle: 39587, mem_idle: 2271200
-> core3 load_inst_num: 1493736, store_inst_num: 1009391
-> core3 private_acc: 1018319, shared_acc: 475417
-> core3 cache_hit: 2481221, cache_miss: 21906, hit_rate: 0.991249
-
-> core0 finish_MESI at cycle 15290915
-> core0 compute_cycle: 10430314, bus_idle: 41327, mem_idle: 2314900
-> core0 load_inst_num: 1489888, store_inst_num: 1007461
-> core0 private_acc: 1016006, shared_acc: 473882
-> core0 cache_hit: 2475314, cache_miss: 22035, hit_rate: 0.991177
-
-> core2 finish_MESI at cycle 19872765
-> core2 compute_cycle: 10430338, bus_idle: 111412, mem_idle: 6808700
-> core2 load_inst_num: 1492629, store_inst_num: 1016428
-> core2 private_acc: 1021367, shared_acc: 471262
-> core2 cache_hit: 2444838, cache_miss: 64219, hit_rate: 0.974405
-
-> simulation finish_MESIed at cycle 19872765.
-> bus_wb: 7089, bus_inv: 386
-```
-
-./coherence MESI fluidanimate 8192 2 32
-
-```
-> set protocol: MESI
-> opening fluidanimate_four/*      
-> successfully opened 4 input files
-> cache_size: 8192 Bytes
-> associativity: 2
-> block_size: 32 Bytes
-> simulation init...
-> core0 init...
-> core2 init...
-> core1 init...
-> core3 init...
-
-> core3 finish_MESI at cycle 40267143
-> core3 compute_cycle: 11301515, bus_idle: 384592, mem_idle: 26101000
-> core3 load_inst_num: 1832174, store_inst_num: 579291
-> core3 private_acc: 1394766, shared_acc: 437408
-> core3 cache_hit: 2244752, cache_miss: 166713, hit_rate: 0.930867
-
-> core1 finish_MESI at cycle 40804747
-> core1 compute_cycle: 11290799, bus_idle: 384830, mem_idle: 26649000
-> core1 load_inst_num: 1821846, store_inst_num: 585998
-> core1 private_acc: 1382674, shared_acc: 439172
-> core1 cache_hit: 2238437, cache_miss: 169407, hit_rate: 0.929644
-
-> core0 finish_MESI at cycle 42481572
-> core0 compute_cycle: 11337782, bus_idle: 323257, mem_idle: 28211300
-> core0 load_inst_num: 1832392, store_inst_num: 744111
-> core0 private_acc: 1394849, shared_acc: 437543
-> core0 cache_hit: 2400349, cache_miss: 176154, hit_rate: 0.931631
-
-> core2 finish_MESI at cycle 44983715
-> core2 compute_cycle: 11337671, bus_idle: 353698, mem_idle: 30654200
-> core2 load_inst_num: 1838008, store_inst_num: 766181
-> core2 private_acc: 1390218, shared_acc: 447790
-> core2 cache_hit: 2411032, cache_miss: 193157, hit_rate: 0.925828
-
-> simulation finish_MESIed at cycle 44983715.
-> bus_wb: 412950, bus_inv: 2175
-```
 ## Conclusion
+TODO

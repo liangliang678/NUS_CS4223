@@ -1,8 +1,12 @@
 #ifndef COHERENCE_H
 #define COHERENCE_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <assert.h>
 
 #define MESI 1
 #define DRAGON 2
@@ -48,6 +52,7 @@ extern pthread_barrier_t barrier;
 
 extern bus_t bus[4];
 extern pthread_mutex_t mutex_bus;
+extern long long bus_rd;
 extern long long bus_wb;
 extern long long bus_inv;
 extern long long bus_upd;
@@ -59,9 +64,9 @@ extern void* DRAGON_core(void* core_num_pointer);
 
 // send a transaction to bus
 extern int bus_send(int core_num, int tran, uint32_t addr, int len);
-// snoop the bus to check if there is new transactions
+// snoop the bus (MESI) to check if there is new transactions
 extern int snoop_bus_MESI(int core_num, int* state, uint32_t* tag, long long* cycle);
-// snoop the bus dragon to check if there is new transactions
+// snoop the bus (dragon) to check if there is new transactions
 extern int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle);
 // check if all other cores have received transaction it sent
 extern int bus_recv(int core_num);
