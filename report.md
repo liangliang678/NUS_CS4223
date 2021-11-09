@@ -100,6 +100,131 @@ Core1 continued and caused 2 write-back when replacing. Overall there is 8 bus r
 
 ### Quantitative Analysis
 TODO
+./coherence MESI blackscholes 8192 2 32
+```
+> set protocol: MESI
+> opening blackscholes_four/*
+> successfully opened 4 input files
+> cache_size: 8192 Bytes
+> associativity: 2
+> block_size: 32 Bytes
+> simulation init...
+> core0 init...
+> core1 init...
+> core2 init...
+> core3 init...
 
+> core1 finish at cycle 15170174
+> core1 compute_cycle: 10383276, bus_idle: 37008, mem_idle: 2260200
+> core1 load_inst_num: 1485857, store_inst_num: 1004611
+> core1 private_acc: 1013516, shared_acc: 472341
+> core1 cache_hit: 2468875, cache_miss: 21593, hit_rate: 0.991330
+
+> core3 finish at cycle 15210592
+> core3 compute_cycle: 10394904, bus_idle: 37853, mem_idle: 2276100
+> core3 load_inst_num: 1493736, store_inst_num: 1009391
+> core3 private_acc: 1018315, shared_acc: 475421
+> core3 cache_hit: 2481258, cache_miss: 21869, hit_rate: 0.991263
+> 
+> core0 finish at cycle 15279788
+> core0 compute_cycle: 10430314, bus_idle: 38056, mem_idle: 2314600
+> core0 load_inst_num: 1489888, store_inst_num: 1007461
+> core0 private_acc: 1015970, shared_acc: 473918
+> core0 cache_hit: 2475364, cache_miss: 21985, hit_rate: 0.991197
+
+> core2 finish at cycle 19862713
+> core2 compute_cycle: 10430338, bus_idle: 105810, mem_idle: 6818300
+> core2 load_inst_num: 1492629, store_inst_num: 1016428
+> core2 private_acc: 1021312, shared_acc: 471317
+> core2 cache_hit: 2444858, cache_miss: 64199, hit_rate: 0.974413
+
+> simulation finished at cycle 19862713.
+> bus_rd: 129646, bus_wb: 7047, bus_inv: 359
+```
+
+./coherence MESI bodytrack 8192 2 32
+
+```
+> set protocol: MESI
+> opening bodytrack_four/*
+> successfully opened 4 input files
+> cache_size: 8192 Bytes
+> associativity: 2
+> block_size: 32 Bytes
+> simulation init...
+> core1 init...
+> core2 init...
+> core3 init...
+> core0 init...
+
+> core2 finish at cycle 18797112
+> core2 compute_cycle: 17556877, bus_idle: 24583, mem_idle: 1100700
+> core2 load_inst_num: 74523, store_inst_num: 43175
+> core2 private_acc: 50528, shared_acc: 23995
+> core2 cache_hit: 109214, cache_miss: 8484, hit_rate: 0.927917
+
+> core1 finish at cycle 42455875
+> core1 compute_cycle: 17120545, bus_idle: 302008, mem_idle: 21747500
+> core1 load_inst_num: 2388005, store_inst_num: 899247
+> core1 private_acc: 1653393, shared_acc: 734612
+> core1 cache_hit: 3096541, cache_miss: 190711, hit_rate: 0.941985
+
+> core0 finish at cycle 42643380
+> core0 compute_cycle: 17729254, bus_idle: 335647, mem_idle: 21314100
+> core0 load_inst_num: 2380720, store_inst_num: 889412
+> core0 private_acc: 1606451, shared_acc: 774269
+> core0 cache_hit: 3083048, cache_miss: 187084, hit_rate: 0.942790
+
+> core3 finish at cycle 43311229
+> core3 compute_cycle: 17140113, bus_idle: 344422, mem_idle: 22508100
+> core3 load_inst_num: 2416052, store_inst_num: 908867
+> core3 private_acc: 1605903, shared_acc: 810149
+> core3 cache_hit: 3128212, cache_miss: 196707, hit_rate: 0.940839
+
+> simulation finished at cycle 43311229.
+> bus_rd: 582986, bus_wb: 83721, bus_inv: 1445
+```
+
+./coherence MESI fluidanimate 8192 2 32
+```
+> set protocol: MESI
+> opening fluidanimate_four/*
+> successfully opened 4 input files
+> cache_size: 8192 Bytes
+> associativity: 2
+> block_size: 32 Bytes
+> simulation init...
+> core0 init...
+> core1 init...
+> core2 init...
+> core3 init...
+
+> core3 finish at cycle 40258346
+> core3 compute_cycle: 11301515, bus_idle: 394105, mem_idle: 26156000
+> core3 load_inst_num: 1832174, store_inst_num: 579291
+> core3 private_acc: 1395268, shared_acc: 436906
+> core3 cache_hit: 2244861, cache_miss: 166604, hit_rate: 0.930912
+
+> core1 finish at cycle 40800710
+> core1 compute_cycle: 11290799, bus_idle: 376560, mem_idle: 26732100
+> core1 load_inst_num: 1821846, store_inst_num: 585998
+> core1 private_acc: 1382913, shared_acc: 438933
+> core1 cache_hit: 2238410, cache_miss: 169434, hit_rate: 0.929632
+
+> core0 finish at cycle 42474796
+> core0 compute_cycle: 11337782, bus_idle: 318837, mem_idle: 28243700
+> core0 load_inst_num: 1832392, store_inst_num: 744111
+> core0 private_acc: 1395169, shared_acc: 437223
+> core0 cache_hit: 2400363, cache_miss: 176140, hit_rate: 0.931636
+
+> core2 finish at cycle 44969397
+> core2 compute_cycle: 11337671, bus_idle: 350732, mem_idle: 30679100
+> core2 load_inst_num: 1838008, store_inst_num: 766181
+> core2 private_acc: 1390413, shared_acc: 447595
+> core2 cache_hit: 2411095, cache_miss: 193094, hit_rate: 0.925853
+
+> simulation finished at cycle 44969397.
+> bus_rd: 705272, bus_wb: 412842, bus_inv: 2219
+```
 ## Conclusion
 TODO
