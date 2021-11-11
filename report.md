@@ -241,4 +241,11 @@ TODO
 > bus_rd: 705272, bus_wb: 412842, bus_inv: 2219
 ```
 ## Conclusion
-TODO
+Cache coherence is essential in ensuring that the correct data is used, ensuring correctness of programs. We appreciate the opportinity to this project in the sense that it allows us explore various problems that come with implementing simulators as well as the snooping mechanisms. 
+
+MESI, being a write invalidate protocol, is more efficient when there are many subsequent writes to the same cache block after an initial write. For these writes to the same block, only one invalidation will be issued, no further bus transactions will be generated for other processors.
+
+Dragon, being a write update protocol, is more efficient when there are many subsequent reads to the same cache block after a write. All other cached values are updated once the writes complete, hence other processors read the same block consecutively no bus transactions will be generated as they already have the values.
+
+As a result, benchmark trace with more consecutive writes to the same cache block after an initial write would see a noticeable lower amount of bus transactions for MESI. Benchmark traces with more consecutive reads on the same cache block would thus produce fewer bus transactions for Dragon.
+
