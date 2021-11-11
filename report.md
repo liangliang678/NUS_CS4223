@@ -58,7 +58,21 @@ If the bus transaction is `BUSRDX`, we have following situations:
 - else: we need to turn state into `INVALID`.
 
 ### Dragon Simulation
-TODO
+We added one more keyword state which is `INVALID` to represent that the block is not in the cache. Initially, all the blocks in cores are assigned `INVALID`. 
+
+When a load is issued and the cache miss occurs, we need to send `BUSRD` to bus. If the evicted cache line is dirty, we need to write it back to the main memory before receiving data from main memory and refill the cache line. Next, we check if the cache block is not shared, the state transitions to `EXCLUSIVE` (E). Otherwise, the state transitions to state `SHARED CLEAN` (Sc). 
+
+When a load is issued and the cache miss doesn't occur, we didn't have to make much changes here since the state of the cache block does not change, and retains the value.
+
+When a write is issued and the cache miss occurs then we need to send `BUSRD` to bus first. After that, we need to check whether the cache block is shared or not. In the case the cache block is shared, the state transitions to `SHARED MODIFIED` (Sm) and the processor becomes the owner. Otherwise, the state transitions to `MODIFIED` (M). 
+
+The most comlicated case this when a write is issued and the cache miss doesn't occur. 
+- If the cache block is in the `MODIFIED` (M) state, there is no transition as the block is not being shared. 
+- If the block is in `SHARED MODIFIED` (Sm) state, we have 2 smaller cases. If the shared line is asserted, a `BUSUPD` is generated to update the other cache block. But the shared line is not asserted, the state transitions to `MODIFIED` (M). 
+- If the cache block is in the `SHARED CLEAN` (Sc) state and the shared line is asserted, a `BUSUPD` is generated to update the other cache block and the state changes to `SHARED MODIFIED` (Sm). But the shared line is not asserted, the state transitions to `MODIFIED` (M), and no bus transactions are generated.
+- If the cache block is in `EXCLUSIVE` (E) state, its state will just be changed to the `MODIFIED` (M) state.
+
+P/s: Most of the process stages for Dragon we infer from Wikipedia Dragon Protocol: https://en.wikipedia.org/wiki/Dragon_protocol.
 
 ## Result
 
