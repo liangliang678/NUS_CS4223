@@ -33,6 +33,10 @@ int main(int argc, char** argv)
         protocol = DRAGON;
         printf("> set protocol: Dragon\n");
     }
+    else if(!strcmp(argv[1], "my")){
+        protocol = MY;
+        printf("> set protocol: my\n");
+    }
     else{
         printf("unknown protocal!\n");
         exit(1);
@@ -112,8 +116,11 @@ int main(int argc, char** argv)
     if(protocol == MESI){
         simulate_MESI();
     }
-    else{
+    else if(protocol == DRAGON){
         simulate_Dragon();
+    }
+    else{
+        simulate_my();
     }
     exit(0);
 }

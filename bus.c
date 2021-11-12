@@ -187,10 +187,94 @@ int snoop_bus_dragon(int core_num, int* state, uint32_t* tag, long long* cycle)
     return ret;
 }
 
+int snoop_bus_my(int core_num, int* state, uint32_t* tag, long long* cycle)
+{
+    pthread_mutex_lock(&mutex_bus);
+    int ret = 0;
+    for(int i = 0; i < 4; i++){
+        if(i != core_num && bus[i].busy && bus[i].recv[core_num] == 0){
+            uint32_t bus_tag = bus[i].addr >> (offset_bits + index_bits);
+            uint32_t bus_index = (bus[i].addr & INDEX_MASK) >> offset_bits;
+            int hit_flag = 0;
+            for(int i = 0; i < associativity; i++){
+                if(bus_tag == tag[i * block_num + bus_index] && state[i * block_num + bus_index] != INVALID){
+                    hit_flag = i + 1;
+                    break;
+                }
+            }
+            if(!hit_flag){
+                bus[i].recv[core_num] = 1;
+                continue;
+            }
+            if(bus[i].tran == BUSRD){
+                if(state[(hit_flag - 1) * block_num + bus_index] == M){
+                    if(cycle){
+                        int counter = 100;
+                        pthread_mutex_unlock(&mutex_bus);
+                        while(counter != 0){
+                            (*cycle)++;
+                            counter--;
+                            pthread_barrier_wait(&barrier);
+                        }
+                        pthread_mutex_lock(&mutex_bus); // Update the main memory
+                        state[(hit_flag - 1) * block_num + bus_index] = Sm;
+                        bus[i].recv[core_num] = 1;
+                        ret = 100;
+                        bus_wb++;
+                    }
+                }else if(state[(hit_flag - 1) * block_num + bus_index] == Sm){
+                    if(cycle){
+                        int counter = block_size / 2;
+                        pthread_mutex_unlock(&mutex_bus);
+                        while(counter != 0){
+                            (*cycle)++;
+                            counter--;
+                            pthread_barrier_wait(&barrier);
+                        }
+                        pthread_mutex_lock(&mutex_bus);
+                        bus[i].recv[core_num] = 2;
+                        ret = block_size / 2;
+                    }
+                }else if(state[(hit_flag - 1) * block_num + bus_index] == Sc || state[(hit_flag - 1) * block_num + bus_index] == E) {
+                    state[(hit_flag - 1) * block_num + bus_index] = Sc;
+                    bus[i].recv[core_num] = 1;
+                }
+                else{ // INVALID
+                    bus[i].recv[core_num] = 1;
+                }
+            }
+            else if(bus[i].tran == BUSUPD){
+                if(state[(hit_flag - 1) * block_num + bus_index] == Sc || state[(hit_flag - 1) * block_num + bus_index] == Sm){
+                    state[(hit_flag - 1) * block_num + bus_index] = Sc;
+                    bus[i].recv[core_num] = 1;
+                    bus_upd += bus[i].len;
+                }
+                else{
+                    bus[i].recv[core_num] = 1;
+                }
+            }
+        }
+    }
+    pthread_mutex_unlock(&mutex_bus);
+    return ret;
+}
+
 int bus_recv(int core_num)
 {
     return (bus[core_num].recv[0] && bus[core_num].recv[1] && bus[core_num].recv[2] && bus[core_num].recv[3]);
 }
+
+int bus_recv_my(int core_num)
+{
+   int recv = (bus[core_num].recv[0] && bus[core_num].recv[1] && bus[core_num].recv[2] && bus[core_num].recv[3]);
+   if(bus[core_num].recv[0] == 2 || bus[core_num].recv[1] == 2 || bus[core_num].recv[2] == 2 || bus[core_num].recv[3] == 2){
+       if(recv == 1){
+           recv++;
+       }
+   }
+    return recv;
+}
+
 
 void bus_cancle(int core_num)
 {

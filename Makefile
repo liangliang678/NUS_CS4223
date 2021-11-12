@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -g -O2 -lpthread
 
-SRC = main.c MESI.c Dragon.c bus.c
+SRC = main.c MESI.c Dragon.c bus.c my.c
 
 all: 
 	$(CC) -o coherence $(SRC) $(CFLAGS)
